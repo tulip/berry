@@ -39,8 +39,6 @@ Yarn now accepts sponsorships! Please give a look at our [OpenCollective](https:
 - Direct portal dependencies for `node_modules` installs will now be given priority during hoisting, preventing cases when indirect regular dependencies would block the way for direct portal dependencies.
 - The `pnpify` binary can now be used from inside directories containing spaces.
 - The CLI bundles built from sources will now output the commit hash instead of the tree hash, as part of their `--version` string.
-- Nested workspaces are properly hoisted by `node-modules` linker.
-- Self-referencing symlinks won't be created for anonymous workspaces when using the `node-modules` linker, since they cannot be used from the code anyway.
 - The cache is now fully atomic when moving files across devices, and is more efficient in general.
 - The PnP patch will now properly pick up changes to the `fs` module, allowing users to patch it.
 - When using PnP, `require.resolve('pnpapi')` will be handled correctly even when using `exports`.
