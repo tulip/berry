@@ -1286,7 +1286,6 @@ export class Project {
 
     while (buildablePackages.size > 0) {
       const savedSize = buildablePackages.size;
-      const buildPromises = [];
 
       for (const locatorHash of buildablePackages) {
         const pkg = this.storedPackages.get(locatorHash);
@@ -1342,7 +1341,7 @@ export class Project {
           if (!ppath.isAbsolute(location))
             throw new Error(`Assertion failed: Expected the build location to be absolute (not ${location})`);
 
-          buildPromises.push((async () => {
+          await ((async () => {
             for (const [buildType, scriptName] of buildInfo.directives) {
               let header = `# This file contains the result of Yarn building a package (${structUtils.stringifyLocator(pkg)})\n`;
               switch (buildType) {
@@ -1409,8 +1408,6 @@ export class Project {
           })());
         }
       }
-
-      await Promise.all(buildPromises);
 
       // If we reach this code, it means that we have circular dependencies
       // somewhere. Worst, it means that the circular dependencies both have
