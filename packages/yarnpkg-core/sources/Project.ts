@@ -1,45 +1,91 @@
-import {npath}                                                          from '@yarnpkg/fslib';
-import {PortablePath, ppath, xfs, normalizeLineEndings, Filename}       from '@yarnpkg/fslib';
-import {parseSyml, stringifySyml}                                       from '@yarnpkg/parsers';
-import {UsageError}                                                     from 'clipanion';
-import {createHash}                                                     from 'crypto';
-import {structuredPatch}                                                from 'diff';
-import pick                                                             from 'lodash/pick';
-import pLimit                                                           from 'p-limit';
-import semver                                                           from 'semver';
-import internal                                                         from 'stream';
-import {promisify}                                                      from 'util';
-import v8                                                               from 'v8';
-import zlib                                                             from 'zlib';
+import {UsageError}               from 'clipanion';
+import {createHash}               from 'crypto';
+import {structuredPatch}          from 'diff';
+import pick                       from 'lodash/pick';
+import pLimit                     from 'p-limit';
+import semver                     from 'semver';
+import internal                   from 'stream';
+import {promisify}                from 'util';
+import v8                         from 'v8';
+import zlib                       from 'zlib';
 
-import {Cache, CacheOptions}                                            from './Cache';
-import {Configuration}                                                  from './Configuration';
-import {Fetcher, FetchOptions}                                          from './Fetcher';
-import {Installer, BuildDirective, BuildDirectiveType, InstallStatus}   from './Installer';
-import {LegacyMigrationResolver}                                        from './LegacyMigrationResolver';
-import {Linker, LinkOptions}                                            from './Linker';
-import {LockfileResolver}                                               from './LockfileResolver';
-import {DependencyMeta, Manifest, type PeerDependencyMeta}              from './Manifest';
-import {MessageName}                                                    from './MessageName';
-import {MultiResolver}                                                  from './MultiResolver';
-import {Report, ReportError}                                            from './Report';
-import {ResolveOptions, Resolver}                                       from './Resolver';
-import {RunInstallPleaseResolver}                                       from './RunInstallPleaseResolver';
-import {SUPPORTS_GROUPS, StreamReport}                                  from './StreamReport';
-import {ThrowReport}                                                    from './ThrowReport';
-import {WorkspaceResolver}                                              from './WorkspaceResolver';
-import {Workspace}                                                      from './Workspace';
-import {isFolderInside}                                                 from './folderUtils';
-import * as formatUtils                                                 from './formatUtils';
-import * as hashUtils                                                   from './hashUtils';
-import * as miscUtils                                                   from './miscUtils';
-import * as nodeUtils                                                   from './nodeUtils';
-import * as scriptUtils                                                 from './scriptUtils';
-import * as semverUtils                                                 from './semverUtils';
-import * as structUtils                                                 from './structUtils';
-import {LinkType}                                                       from './types';
-import {Descriptor, Ident, Locator, Package}                            from './types';
-import {IdentHash, DescriptorHash, LocatorHash, PackageExtensionStatus} from './types';
+import {Configuration}            from './Configuration';
+import {LegacyMigrationResolver}  from './LegacyMigrationResolver';
+import {LockfileResolver}         from './LockfileResolver';
+import {MessageName}              from './MessageName';
+import {MultiResolver}            from './MultiResolver';
+import {RunInstallPleaseResolver} from './RunInstallPleaseResolver';
+import {ThrowReport}              from './ThrowReport';
+import {WorkspaceResolver}        from './WorkspaceResolver';
+import {Workspace}                from './Workspace';
+import {isFolderInside}           from './folderUtils';
+import * as formatUtils           from './formatUtils';
+import * as hashUtils             from './hashUtils';
+import * as miscUtils             from './miscUtils';
+import * as nodeUtils             from './nodeUtils';
+import * as scriptUtils           from './scriptUtils';
+import * as semverUtils           from './semverUtils';
+import * as structUtils           from './structUtils';
+
+import {
+  Filename,
+  normalizeLineEndings,
+  npath,
+  PortablePath,
+  ppath,
+  xfs,
+} from '@yarnpkg/fslib';
+import {
+  parseSyml,
+  stringifySyml,
+} from '@yarnpkg/parsers';
+
+import {
+  Cache,
+  CacheOptions,
+} from './Cache';
+import {
+  Fetcher,
+  FetchOptions,
+} from './Fetcher';
+import {
+  BuildDirective,
+  BuildDirectiveType,
+  Installer,
+  InstallStatus,
+} from './Installer';
+import {
+  Linker,
+  LinkOptions,
+} from './Linker';
+import {
+  DependencyMeta,
+  Manifest,
+  type PeerDependencyMeta,
+} from './Manifest';
+import {
+  Report,
+  ReportError,
+} from './Report';
+import {
+  ResolveOptions,
+  Resolver,
+} from './Resolver';
+import {
+  StreamReport,
+  SUPPORTS_GROUPS,
+} from './StreamReport';
+import {
+  Descriptor,
+  DescriptorHash,
+  Ident,
+  IdentHash,
+  LinkType,
+  Locator,
+  LocatorHash,
+  Package,
+  PackageExtensionStatus,
+} from './types';
 
 // When upgraded, the lockfile entries have to be resolved again (but the specific
 // versions are still pinned, no worry). Bump it when you change the fields within
@@ -57,6 +103,7 @@ const INSTALL_STATE_VERSION = 3;
 const MULTIPLE_KEYS_REGEXP = / *, */g;
 const TRAILING_SLASH_REGEXP = /\/$/;
 
+const BUILD_CONCURRENCY = 4;
 const FETCHER_CONCURRENCY = 32;
 
 const gzip = promisify(zlib.gzip);
@@ -1579,6 +1626,8 @@ export class Project {
       return true;
     };
 
+    const limitBuild = pLimit(BUILD_CONCURRENCY);
+
     while (buildablePackages.size > 0) {
       const savedSize = buildablePackages.size;
       const buildPromises: Array<Promise<unknown>> = [];
@@ -1637,7 +1686,7 @@ export class Project {
 
             const stdin = null;
 
-            const wasBuildSuccessful = await xfs.mktempPromise(async logDir => {
+            const wasBuildSuccessful = await limitBuild(() => xfs.mktempPromise(async logDir => {
               const logFile = ppath.join(logDir, `build.log`);
 
               const {stdout, stderr} = this.configuration.getSubprocessStreams(logFile, {
@@ -1684,7 +1733,7 @@ export class Project {
 
 
               return isOptional;
-            });
+            }));
 
             if (!wasBuildSuccessful) {
               return false;
