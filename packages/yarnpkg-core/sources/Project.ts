@@ -49,6 +49,10 @@ export const LOCKFILE_VERSION = miscUtils.parseInt(
   10,
 );
 
+const BUILD_CONCURRENCY = miscUtils.parseInt(
+  process.env.YARN_BUILD_CONCURRENCY ?? 4,
+);
+
 // Same thing but must be bumped when the members of the Project class changes (we
 // don't recommend our users to check-in this file, so it's fine to bump it even
 // between patch or minor releases).
@@ -1581,6 +1585,7 @@ export class Project {
 
     while (buildablePackages.size > 0) {
       const savedSize = buildablePackages.size;
+      const limitBuilds = pLimit(BUILD_CONCURRENCY);
       const buildPromises: Array<Promise<unknown>> = [];
 
       for (const locatorHash of buildablePackages) {
@@ -1650,10 +1655,10 @@ export class Project {
               try {
                 switch (directive.type) {
                   case BuildDirectiveType.SCRIPT: {
-                    exitCode = await scriptUtils.executePackageScript(pkg, directive.script, [], {cwd: location, project: this, stdin, stdout, stderr});
+                    exitCode = await limitBuilds(() => scriptUtils.executePackageScript(pkg, directive.script, [], {cwd: location, project: this, stdin, stdout, stderr}));
                   } break;
                   case BuildDirectiveType.SHELLCODE: {
-                    exitCode = await scriptUtils.executePackageShellcode(pkg, directive.script, [], {cwd: location, project: this, stdin, stdout, stderr});
+                    exitCode = await limitBuilds(() => scriptUtils.executePackageShellcode(pkg, directive.script, [], {cwd: location, project: this, stdin, stdout, stderr}));
                   } break;
                 }
               } catch (error) {
