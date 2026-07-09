@@ -138,6 +138,12 @@ export type PluginConfiguration = {
 // - options that enable a feature must begin with the "enable" prefix
 //   ex: enableEmojis, enableColors
 export const coreDefinitions: {[coreSettingName: string]: SettingsDefinition} = {
+  root: {
+    description: `If true, no configurations further upwards in the directory tree will be used`,
+    type: SettingsType.BOOLEAN,
+    default: false,
+  },
+
   // Not implemented for now, but since it's part of all Yarn installs we want to declare it in order to improve drop-in compatibility
   lastUpdateCheck: {
     description: `Last timestamp we checked whether new Yarn versions were available`,
@@ -1138,6 +1144,11 @@ export class Configuration {
         }
 
         rcFiles.push({path: rcPath, cwd: currentCwd, data});
+
+        // If yarnrc has the "root" flag, stop traversing upwards through parent directories
+        if (data.root) {
+          break;
+        }
       }
 
       nextCwd = ppath.dirname(currentCwd);
